@@ -32,6 +32,15 @@ describe("toLines", () => {
     expect(parsed.bounds).toEqual(arrays.bounds);
   });
 
+  test("passes tool, feedrate, width, and height through unchanged", () => {
+    const arrays = parseGcode("T1\n;WIDTH:0.5\n;HEIGHT:0.3\nG1 X1 Y1 Z0.2 F1200 E1\n");
+    const parsed = toLines(arrays);
+    expect(parsed.lines[0].tool).toBe(1);
+    expect(parsed.lines[0].feedrate).toBeCloseTo(1200, 5);
+    expect(parsed.lines[0].width).toBeCloseTo(0.5, 5);
+    expect(parsed.lines[0].height).toBeCloseTo(0.3, 5);
+  });
+
   test("an empty parse yields no lines", () => {
     expect(toLines(parseGcode("")).lines).toEqual([]);
   });
