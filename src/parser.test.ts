@@ -127,6 +127,14 @@ describe("parseGcode", () => {
       expect(m.layer[i]).toBe(0);
       expect(m.tool[i]).toBe(0);
       expect(m.isTravel[i]).toBe(0);
+      // No ;TYPE:/F/;WIDTH:/;HEIGHT: comment anywhere in the input, so these
+      // stay at their initial defaults for every point — checked per-index
+      // (not just `.length`) so a grow() that dropped one of these four
+      // copies would leave indices 0..1023 zeroed and still be caught.
+      expect(m.featureType[i]).toBe(FEATURE_UNKNOWN);
+      expect(m.feedrate[i]).toBe(1500);
+      expect(m.width[i]).toBeCloseTo(0.42, 5);
+      expect(m.height[i]).toBeCloseTo(0.2, 5);
     };
 
     expectPoint(0);        // written before any growth, cap 1024
