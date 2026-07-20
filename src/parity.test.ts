@@ -1,15 +1,26 @@
 import { describe, test, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { parseGcode } from "./parser";
 
 const FIXTURES = path.resolve(__dirname, "../fixtures");
+// The digest only compares the first/last EDGE points of each fixture (see
+// `summarize` below), matching the Rust side's `ParitySummary::head`/`tail`
+// (services/procontrol-core/src/preview/parity.rs). Every committed fixture
+// today has <= 17 points, so head+tail covers every point and there is no
+// uncompared middle — but a future fixture over 2*EDGE points would have its
+// middle silently unchecked by this test. Keep fixtures small, or widen EDGE
+// (and its Rust twin) if that changes.
 const EDGE = 20;
 
-const NAMES = [
-  "prusaslicer", "orca", "cura", "simplify3d",
-  "no-layer-comments", "zhop", "idex",
-];
+// Derived from the fixture directory rather than hardcoded, so a new fixture
+// added on the Rust side (via gen-preview-fixtures) enrolls itself here
+// instead of silently going untested until someone remembers to update this
+// list by hand.
+const NAMES = readdirSync(path.join(FIXTURES, "parity"))
+  .filter((f) => f.endsWith(".json"))
+  .map((f) => f.slice(0, -".json".length))
+  .sort();
 
 /**
  * Same digest shape the Rust generator writes. Field names are camelCase to
@@ -84,6 +95,13 @@ function froundDeep(value: unknown): unknown {
 }
 
 describe("parser parity with the Rust implementation", () => {
+  test("discovers at least one fixture", () => {
+    // A directory that silently reads as empty (e.g. a bad path after a
+    // repo reorg) would make every test below vacuously pass zero
+    // assertions — exactly the failure mode discovery is meant to close.
+    expect(NAMES.length).toBeGreaterThan(0);
+  });
+
   for (const name of NAMES) {
     test(`${name} matches the committed golden`, () => {
       const gcode = readFileSync(path.join(FIXTURES, "gcode", `${name}.gcode`), "utf8");

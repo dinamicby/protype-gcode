@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { decodePtp, PtpDecodeError } from "./ptp-decoder";
 import { parseGcode } from "./parser";
@@ -295,15 +295,20 @@ describe("decodePtp point-layer parity with the source parse", () => {
   // 0-based and contiguous. Every fixture the parsers are pinned to
   // (parity.test.ts) must also be pinned through the codec, or a codec bug
   // like this one stays invisible.
-  const FIXTURE_NAMES = [
-    "prusaslicer",
-    "orca",
-    "cura",
-    "simplify3d",
-    "no-layer-comments",
-    "zhop",
-    "idex",
-  ];
+  //
+  // Derived from the fixture directory rather than hardcoded, so a new
+  // fixture enrolls itself instead of silently going untested.
+  const FIXTURE_NAMES = readdirSync(path.join(FIXTURES, "ptp"))
+    .filter((f) => f.endsWith(".ptp"))
+    .map((f) => f.slice(0, -".ptp".length))
+    .sort();
+
+  test("discovers at least one fixture", () => {
+    // A directory that silently reads as empty would make every test below
+    // vacuously pass zero assertions — exactly the failure mode discovery is
+    // meant to close.
+    expect(FIXTURE_NAMES.length).toBeGreaterThan(0);
+  });
 
   for (const name of FIXTURE_NAMES) {
     test(`${name}: decoded point-layers match the source parse`, () => {
