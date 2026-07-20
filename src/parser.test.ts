@@ -103,4 +103,37 @@ describe("parseGcode", () => {
     expect(m.count).toBe(0);
     expect(m.bounds).toEqual({ minX: 0, maxX: 220, minY: 0, maxY: 220, minZ: 0, maxZ: 100 });
   });
+
+  test("grows the typed-array storage past the initial capacity and preserves earlier data", () => {
+    // INITIAL_CAPACITY is 1024; N is chosen comfortably past it so PointBuilder.grow()
+    // runs twice (1024 -> 2048 -> 4096), exercising the capacity-doubling path that
+    // every fixture and every other unit test (max 17 points) never touches.
+    const N = 2500;
+    const lines = ["G1 X0 Y0 Z0.2 E1"];
+    for (let i = 1; i < N; i++) {
+      lines.push(`G1 X${i} Y${i * 2} E${i + 1}`);
+    }
+    const m = parseGcode(lines.join("\n") + "\n");
+
+    expect(m.count).toBe(N);
+    for (const arr of [m.xs, m.ys, m.zs, m.layer, m.featureType, m.tool, m.isTravel, m.feedrate, m.width, m.height]) {
+      expect(arr.length).toBe(N);
+    }
+
+    const expectPoint = (i: number) => {
+      expect(m.xs[i]).toBeCloseTo(i, 5);
+      expect(m.ys[i]).toBeCloseTo(i * 2, 5);
+      expect(m.zs[i]).toBeCloseTo(0.2, 5);
+      expect(m.layer[i]).toBe(0);
+      expect(m.tool[i]).toBe(0);
+      expect(m.isTravel[i]).toBe(0);
+    };
+
+    expectPoint(0);        // written before any growth, cap 1024
+    expectPoint(1000);     // still in the first-generation (1024) buffer
+    expectPoint(1024);     // first index written right after the 1024 -> 2048 grow
+    expectPoint(2000);     // in the second-generation (2048) buffer
+    expectPoint(2048);     // first index written right after the 2048 -> 4096 grow
+    expectPoint(N - 1);    // 2499, last index, in the final (4096-capacity) buffer
+  });
 });

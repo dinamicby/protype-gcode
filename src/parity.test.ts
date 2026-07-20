@@ -62,6 +62,13 @@ function summarize(text: string) {
  * Rust's type-directed deserialization does for free — this recovers the
  * bit-exact-at-f32-precision comparison the test is actually meant to make,
  * without touching the fixtures or the parser.
+ *
+ * Applied to *both* sides of the comparison (golden and `summarize()`
+ * output), not just the golden: `parseGcode`'s `layers` field is
+ * intentionally full f64 precision (see `types.ts`), so without narrowing it
+ * here too, `layers` would mismatch the f32-precision golden even though
+ * both sides agree on the underlying value. This is a test-only
+ * normalization — production code stays untouched.
  */
 function froundDeep(value: unknown): unknown {
   if (typeof value === "number") return Math.fround(value);
@@ -81,7 +88,7 @@ describe("parser parity with the Rust implementation", () => {
     test(`${name} matches the committed golden`, () => {
       const gcode = readFileSync(path.join(FIXTURES, "gcode", `${name}.gcode`), "utf8");
       const goldenRaw = JSON.parse(readFileSync(path.join(FIXTURES, "parity", `${name}.json`), "utf8"));
-      expect(summarize(gcode)).toEqual(froundDeep(goldenRaw));
+      expect(froundDeep(summarize(gcode))).toEqual(froundDeep(goldenRaw));
     });
   }
 });

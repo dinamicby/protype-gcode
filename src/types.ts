@@ -1,3 +1,9 @@
+/**
+ * Bounding box of all parsed points. Computed from `ParsedGcodeArrays`'s
+ * typed-array storage, so each field is float32-precision (narrowed on
+ * write into `xs`/`ys`/`zs`) even though the type is `number` — this
+ * matches the Rust side's `f32` bounds fields.
+ */
 export interface Bounds {
   minX: number;
   maxX: number;
@@ -16,6 +22,13 @@ export interface Bounds {
  *
  * All typed arrays are exactly `count` long — the builder trims them — so
  * `xs.length === count` holds and callers can iterate either way.
+ *
+ * `xs`, `ys`, `zs`, `feedrate`, `width`, and `height` are `Float32Array`s, so
+ * every value they hold is float32-precision. `layers` and `bounds` are
+ * plain `number`/`number[]`, but `bounds` is derived from this same
+ * float32-precision storage (see `parser.ts`'s bounds computation) — only
+ * `layers` retains full f64 precision, carried over unchanged from the
+ * original parser's raw `z` tracking.
  */
 export interface ParsedGcodeArrays {
   xs: Float32Array;

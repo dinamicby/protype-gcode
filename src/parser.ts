@@ -274,6 +274,14 @@ export function parseGcode(text: string): ParsedGcodeArrays {
   }
 
   // ─── Compute bounds ───
+  // Iterates `builder.xs/ys/zs`, which are already float32-precision (the
+  // typed arrays narrow on write in `PointBuilder.push`), whereas the
+  // original iterated full-precision doubles. This is a deliberate deviation
+  // from the original port: it mirrors the Rust implementation, whose
+  // `PreviewModel::compute_bounds` (services/procontrol-core/src/preview/
+  // model.rs) also runs over `f32` fields, and it is the only sensible choice
+  // given this struct-of-arrays layout — there is no full-precision source
+  // left to iterate once points are written into typed-array storage.
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
   let minZ = Infinity, maxZ = -Infinity;
@@ -297,13 +305,9 @@ export function parseGcode(text: string): ParsedGcodeArrays {
   };
 
   // `layerZs` accumulates the same raw-double `z`/`newZ` values the original
-  // parser used, so the dedup/order logic above is untouched. Every other
-  // field in this struct is f32-precision (the typed arrays narrow on
-  // write); narrow here too, at the point of return, so `layers` agrees with
-  // the Rust side — which parses gcode tokens straight into `f32` and stores
-  // `PreviewModel::layers` as `Vec<f32>` — instead of carrying extra double
-  // precision that only this one field would have.
-  const layers = [...layerZs].sort((a, b) => a - b).map((v) => Math.fround(v));
+  // parser used; sort ascending exactly as the original does, with no
+  // precision narrowing — this field is a straight, faithful port.
+  const layers = [...layerZs].sort((a, b) => a - b);
 
   return builder.finish(layers, bounds);
 }
