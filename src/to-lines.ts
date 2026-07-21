@@ -9,7 +9,7 @@ import type { GcodeLine, ParsedGcode, ParsedGcodeArrays } from "./types";
  * instead. Kept because migrating the viewers is a separate project.
  *
  * `e` is filled with 0: the field is absent from the canonical form because no
- * renderer reads it, and the `.ptp` decoder has always done the same.
+ * renderer reads it, and the `pcode` decoder has always done the same.
  */
 export function toLines(arrays: ParsedGcodeArrays): ParsedGcode {
   const lines: GcodeLine[] = new Array(arrays.count);

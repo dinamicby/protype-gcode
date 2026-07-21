@@ -1,5 +1,5 @@
 /**
- * Feature-type discriminants. These values are a wire contract: the `.ptp`
+ * Feature-type discriminants. These values are a wire contract: the `pcode`
  * format stores them as raw bytes and the Rust generator emits the same
  * numbers. Never renumber them.
  */

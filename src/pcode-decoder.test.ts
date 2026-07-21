@@ -1,28 +1,28 @@
 import { describe, test, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { decodePtp, PtpDecodeError } from "./ptp-decoder";
+import { decodePcode, PcodeDecodeError } from "./pcode-decoder";
 import { parseGcode } from "./parser";
 import { FEATURE_OUTER_WALL, FEATURE_SEAM_START, FEATURE_TOP_SURFACE } from "./features";
 
 const FIXTURES = path.resolve(__dirname, "../fixtures");
 
 /**
- * Reads `fixtures/ptp/<name>.ptp` and slices it down to the file's exact
+ * Reads `fixtures/pcode/<name>.pcode` and slices it down to the file's exact
  * bytes. `Buffer`s returned by `readFileSync` are frequently backed by a
  * larger, shared pooled `ArrayBuffer` — handing that raw `.buffer` to
- * `decodePtp` without slicing would let bytes from unrelated reads leak into
- * the "buffer" the decoder sees, and would silently pass even if `decodePtp`
+ * `decodePcode` without slicing would let bytes from unrelated reads leak into
+ * the "buffer" the decoder sees, and would silently pass even if `decodePcode`
  * ignored `byteOffset`/`byteLength` entirely.
  */
 function loadFixture(name: string): ArrayBuffer {
-  const b = readFileSync(path.join(FIXTURES, "ptp", `${name}.ptp`));
+  const b = readFileSync(path.join(FIXTURES, "pcode", `${name}.pcode`));
   return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 }
 
-describe("decodePtp", () => {
+describe("decodePcode", () => {
   test("returns the ParsedGcodeArrays shape the renderer consumes", () => {
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
     expect(model.xs).toBeInstanceOf(Float32Array);
     expect(Array.isArray(model.layers)).toBe(true);
     expect(model.count).toBeGreaterThan(0);
@@ -37,7 +37,7 @@ describe("decodePtp", () => {
   test("layers and bounds agree with the source gcode", () => {
     const source = readFileSync(path.join(FIXTURES, "gcode", "prusaslicer.gcode"), "utf8");
     const expected = parseGcode(source);
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
 
     expect(model.layers).toEqual(expected.layers);
     expect(model.bounds.minX).toBeCloseTo(expected.bounds.minX, 2);
@@ -51,7 +51,7 @@ describe("decodePtp", () => {
   test("decoding a fixture agrees with parsing its source gcode", () => {
     const gcode = readFileSync(path.join(FIXTURES, "gcode", "prusaslicer.gcode"), "utf8");
     const parsed = parseGcode(gcode);
-    const decoded = decodePtp(loadFixture("prusaslicer"));
+    const decoded = decodePcode(loadFixture("prusaslicer"));
 
     expect(decoded.layers).toEqual(parsed.layers);
     expect(decoded.bounds.minX).toBeCloseTo(parsed.bounds.minX, 2);
@@ -59,14 +59,14 @@ describe("decodePtp", () => {
   });
 
   test("preserves feature types and travel breaks", () => {
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
     expect(Array.from(model.featureType).some((f) => f === FEATURE_OUTER_WALL)).toBe(true);
     expect(Array.from(model.isTravel).some((t) => t === 1)).toBe(true);
     expect(Array.from(model.isTravel).some((t) => t === 0)).toBe(true);
   });
 
   test("assigns every point to a layer present in the layer list", () => {
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
     const maxLayer = Math.max(...model.layer);
     expect(maxLayer).toBe(model.layers.length - 1);
   });
@@ -74,22 +74,38 @@ describe("decodePtp", () => {
   test("rejects a buffer with a bad magic", () => {
     const bytes = new Uint8Array(loadFixture("prusaslicer").slice(0));
     bytes[0] = 0x58;
-    expect(() => decodePtp(bytes.buffer)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(bytes.buffer)).toThrow(PcodeDecodeError);
+  });
+
+  test("rejects the old ptp1 magic — the reset is clean, not dual-format", () => {
+    const bytes = new Uint8Array(loadFixture("prusaslicer"));
+    // Overwrite PCOD with the retired PTP1 magic.
+    bytes[0] = 0x50; bytes[1] = 0x54; bytes[2] = 0x50; bytes[3] = 0x31; // "PTP1"
+    expect(() => decodePcode(bytes.buffer)).toThrow(PcodeDecodeError);
+  });
+
+  test("ignores unknown flag bits instead of rejecting", () => {
+    const bytes = new Uint8Array(loadFixture("prusaslicer"));
+    const before = decodePcode(bytes.buffer.slice(0)).count;
+    // Set every bit of the reserved u16 flags field (offset 6-7).
+    bytes[6] = 0xff; bytes[7] = 0xff;
+    const after = decodePcode(bytes.buffer);
+    expect(after.count).toBe(before);
   });
 
   test("rejects an unsupported version", () => {
     const bytes = new Uint8Array(loadFixture("prusaslicer").slice(0));
     bytes[4] = 99;
-    expect(() => decodePtp(bytes.buffer)).toThrow(/version/i);
+    expect(() => decodePcode(bytes.buffer)).toThrow(/version/i);
   });
 
   test("rejects truncated data", () => {
     const full = loadFixture("prusaslicer");
-    expect(() => decodePtp(full.slice(0, 8))).toThrow(PtpDecodeError);
+    expect(() => decodePcode(full.slice(0, 8))).toThrow(PcodeDecodeError);
   });
 
   test("decodes a view embedded at a non-zero offset inside a larger buffer identically to a standalone decode", () => {
-    // Today's one caller always hands decodePtp a fresh ArrayBuffer starting
+    // Today's one caller always hands decodePcode a fresh ArrayBuffer starting
     // at byte 0, but the decoder must not assume that: it should honour a
     // view's byteOffset/byteLength rather than reading from the start of the
     // underlying buffer.
@@ -103,7 +119,7 @@ describe("decodePtp", () => {
     padded.set(artifact, PADDING_BEFORE);
     const embeddedView = new Uint8Array(padded.buffer, PADDING_BEFORE, artifact.length);
 
-    expect(decodePtp(embeddedView)).toEqual(decodePtp(standalone));
+    expect(decodePcode(embeddedView)).toEqual(decodePcode(standalone));
   });
 
   // ─── Value-level decoding ───
@@ -113,7 +129,7 @@ describe("decodePtp", () => {
   // numbers against the geometry in fixtures/gcode/prusaslicer.gcode.
 
   test("decodes coordinates and per-point attributes exactly", () => {
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
 
     // The skirt loop on layer 0: absolute start, then three deltas. A
     // sign error in the zigzag decoder shows up here immediately.
@@ -142,7 +158,7 @@ describe("decodePtp", () => {
     // Layer 1 re-emits its own SET_* opcodes. If the decoder leaked layer 0's
     // trailing state (infill, featureType 3) instead, the first extrusion of
     // layer 1 would not read as the seam start the parser recorded.
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
     const layer1: number[] = [];
     for (let i = 0; i < model.count; i++) {
       if (model.layer[i] === 1) layer1.push(i);
@@ -171,7 +187,7 @@ describe("decodePtp", () => {
     // the geometry, so `layers` reads [0, 0.2] while the points sit at
     // 0.2/0.4. Deriving either from the other would silently break the remote
     // viewer's agreement with the local one — see parser.ts's `layers` doc.
-    const model = decodePtp(loadFixture("prusaslicer"));
+    const model = decodePcode(loadFixture("prusaslicer"));
 
     expect(model.layers).toEqual([0, 0.2]);
     // `zs` is a Float32Array; compare against the float32-narrowed values
@@ -187,7 +203,7 @@ describe("decodePtp", () => {
   // These bytes arrive over the network, so every hostile shape must throw a
   // typed error rather than hang, over-allocate, or return wrong data.
 
-  /** Builds a 44-byte `.ptp` v2 header with the given counts, plus a raw stream. */
+  /** Builds a 44-byte `pcode` v1 header with the given counts, plus a raw stream. */
   function synthetic(
     counts: { layerCount: number; pointCount: number; layerZCount: number },
     table: Array<[number, number, number, number]> = [],
@@ -197,8 +213,8 @@ describe("decodePtp", () => {
     const LAYER_ENTRY_LEN = 16;
     const buf = new ArrayBuffer(HEADER_LEN + table.length * LAYER_ENTRY_LEN + stream.length);
     const view = new DataView(buf);
-    view.setUint32(0, 0x31505450, true); // "PTP1"
-    view.setUint16(4, 2, true); // version
+    view.setUint32(0, 0x444f4350, true); // "PCOD"
+    view.setUint16(4, 1, true); // version
     view.setUint32(32, counts.layerCount, true);
     view.setUint32(36, counts.pointCount, true);
     view.setUint32(40, counts.layerZCount, true);
@@ -215,12 +231,12 @@ describe("decodePtp", () => {
 
   test("rejects a hostile layer-Z count instead of allocating for it", () => {
     const buf = synthetic({ layerCount: 0, pointCount: 0, layerZCount: 0xffffffff });
-    expect(() => decodePtp(buf)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(buf)).toThrow(PcodeDecodeError);
   });
 
   test("rejects a hostile layer count instead of allocating for it", () => {
     const buf = synthetic({ layerCount: 0xffffffff, pointCount: 0, layerZCount: 0 });
-    expect(() => decodePtp(buf)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(buf)).toThrow(PcodeDecodeError);
   });
 
   test("rejects a hostile point count instead of allocating for it", () => {
@@ -229,7 +245,7 @@ describe("decodePtp", () => {
     // must be rejected before it ever reaches `new Float32Array`, not just
     // eventually fail the `written !== pointCount` check.
     const buf = synthetic({ layerCount: 0, pointCount: 0xffffffff, layerZCount: 0 });
-    expect(() => decodePtp(buf)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(buf)).toThrow(PcodeDecodeError);
   });
 
   test("rejects an unknown opcode", () => {
@@ -238,7 +254,7 @@ describe("decodePtp", () => {
       [[0, 200, 0, 1]],
       [0x99],
     );
-    expect(() => decodePtp(buf)).toThrow(/opcode/i);
+    expect(() => decodePcode(buf)).toThrow(/opcode/i);
   });
 
   test("terminates on a polyline whose declared length outruns the buffer", () => {
@@ -251,7 +267,7 @@ describe("decodePtp", () => {
       [[0, 200, 0, 1]],
       [OP_POLYLINE, 0xff, 0xff, 0xff, 0x7f],
     );
-    expect(() => decodePtp(buf)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(buf)).toThrow(PcodeDecodeError);
   });
 
   test("rejects a layer table offset that points past the stream", () => {
@@ -264,31 +280,31 @@ describe("decodePtp", () => {
       [[0, 200, 0xffff, 1]],
       [0],
     );
-    expect(() => decodePtp(buf)).toThrow(PtpDecodeError);
+    expect(() => decodePcode(buf)).toThrow(PcodeDecodeError);
   });
 
   test("rejects a layer table with a duplicate layer id", () => {
-    // v2's `layerId` field: two entries claiming the same layer id can only
-    // come from a corrupted or hostile stream (a well-formed encoder's
-    // BTreeMap keys are unique) and must be rejected rather than silently
-    // giving "the same" layer two different Z values.
+    // The layer table's `layerId` field: two entries claiming the same layer
+    // id can only come from a corrupted or hostile stream (a well-formed
+    // encoder's BTreeMap keys are unique) and must be rejected rather than
+    // silently giving "the same" layer two different Z values.
     const HEADER_LEN = 44;
     const LAYER_ENTRY_LEN = 16;
     const buf = new ArrayBuffer(HEADER_LEN + LAYER_ENTRY_LEN * 2);
     const view = new DataView(buf);
-    view.setUint32(0, 0x31505450, true);
-    view.setUint16(4, 2, true); // version 2
+    view.setUint32(0, 0x444f4350, true); // "PCOD"
+    view.setUint16(4, 1, true); // version
     view.setUint32(32, 2, true); // layerCount
     view.setUint32(36, 0, true); // pointCount
     view.setUint32(40, 0, true); // layerZCount
     // Both entries declare layerId 0.
     view.setUint32(HEADER_LEN, 0, true);
     view.setUint32(HEADER_LEN + LAYER_ENTRY_LEN, 0, true);
-    expect(() => decodePtp(buf)).toThrow(/duplicate layer id/i);
+    expect(() => decodePcode(buf)).toThrow(/duplicate layer id/i);
   });
 });
 
-describe("decodePtp point-layer parity with the source parse", () => {
+describe("decodePcode point-layer parity with the source parse", () => {
   // C1 regression, closing the structural gap that hid it: the codec
   // round-trip used to be pinned against exactly one fixture (prusaslicer),
   // which is the one fixture whose source layer ids happen to already be
@@ -298,9 +314,9 @@ describe("decodePtp point-layer parity with the source parse", () => {
   //
   // Derived from the fixture directory rather than hardcoded, so a new
   // fixture enrolls itself instead of silently going untested.
-  const FIXTURE_NAMES = readdirSync(path.join(FIXTURES, "ptp"))
-    .filter((f) => f.endsWith(".ptp"))
-    .map((f) => f.slice(0, -".ptp".length))
+  const FIXTURE_NAMES = readdirSync(path.join(FIXTURES, "pcode"))
+    .filter((f) => f.endsWith(".pcode"))
+    .map((f) => f.slice(0, -".pcode".length))
     .sort();
 
   test("discovers at least one fixture", () => {
@@ -315,7 +331,7 @@ describe("decodePtp point-layer parity with the source parse", () => {
       const gcode = readFileSync(path.join(FIXTURES, "gcode", `${name}.gcode`), "utf8");
       const sourceLayers = new Set(parseGcode(gcode).layer);
 
-      const decodedLayers = new Set(decodePtp(loadFixture(name)).layer);
+      const decodedLayers = new Set(decodePcode(loadFixture(name)).layer);
 
       expect(decodedLayers).toEqual(sourceLayers);
     });

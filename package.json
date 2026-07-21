@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Canonical G-code parser and .ptp decoder shared across Protype apps",
+  "description": "Canonical G-code parser and pcode decoder shared across Protype apps",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {

@@ -1,13 +1,14 @@
 # protype-gcode
 
-Canonical G-code parser and `.ptp` decoder shared across the Protype apps
+Canonical G-code parser and `pcode` decoder shared across the Protype apps
 (ProControlTauri today; ProtypeHubTauri and ProtypeHubNative are intended
 future adopters — see the design doc referenced below).
 
 ## What this is
 
-A dependency-free data layer: parse G-code text or decode a `.ptp` artifact
-into one typed-array shape, in memory, with no rendering attached.
+A dependency-free data layer: parse G-code text or decode a `pcode` artifact
+into one typed-array shape, in memory, with no rendering attached. See
+`SPEC.md` in this package for the normative `pcode` format specification.
 
 ## What this deliberately excludes
 
@@ -69,20 +70,20 @@ the consuming app, not here.
   shape, for viewers that predate the typed-array layout. Allocates one
   object per point; a renderer that can read the arrays directly should
   do that instead.
-- `decodePtp(input: ArrayBuffer | ArrayBufferView): ParsedGcodeArrays` —
-  decodes the lightweight `.ptp` v2 artifact (produced by
+- `decodePcode(input: ArrayBuffer | ArrayBufferView): ParsedGcodeArrays` —
+  decodes the lightweight `pcode` v1 artifact (produced by
   `procontrol-core`'s preview worker for remote clients) into the same
-  canonical shape `parseGcode` produces. Throws `PtpDecodeError` on any
+  canonical shape `parseGcode` produces. Throws `PcodeDecodeError` on any
   malformed or hostile input rather than returning partial data.
 - `FEATURE_UNKNOWN`, `FEATURE_OUTER_WALL`, `FEATURE_INNER_WALL`,
   `FEATURE_INFILL`, `FEATURE_SOLID_INFILL`, `FEATURE_TOP_SURFACE`,
   `FEATURE_BOTTOM_SURFACE`, `FEATURE_SUPPORT`, `FEATURE_BRIDGE`,
   `FEATURE_SKIRT_BRIM`, `FEATURE_SEAM_START` — feature-type discriminants.
-  These are a wire contract with the `.ptp` format and with
+  These are a wire contract with the `pcode` format and with
   `procontrol-core`'s Rust mirror in `services/procontrol-core/src/preview/
   model.rs`. Never renumber them.
 - The two output shapes: `ParsedGcodeArrays` (struct-of-arrays, what
-  `parseGcode`/`decodePtp` return) and `ParsedGcode`/`GcodeLine` (array-
+  `parseGcode`/`decodePcode` return) and `ParsedGcode`/`GcodeLine` (array-
   of-structs, what `toLines` returns for legacy viewers). See
   `src/types.ts`.
 
@@ -98,10 +99,10 @@ the full mechanism.
 
 ## The golden fixtures: read-only, produced only by Rust
 
-`fixtures/gcode/`, `fixtures/parity/`, and `fixtures/ptp/` pin this
+`fixtures/gcode/`, `fixtures/parity/`, and `fixtures/pcode/` pin this
 package's parser and decoder against the Rust implementation in
 `procontrol-core` (ProControlTauri's `services/procontrol-core/src/
-preview/`), so the two stay byte-for-byte identical and the remote (`.ptp`)
+preview/`), so the two stay byte-for-byte identical and the remote (`pcode`)
 preview never silently diverges from the local one.
 
 **This package's tests read and assert against those fixtures. They never
