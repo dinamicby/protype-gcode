@@ -131,8 +131,12 @@ function parseFloatPrefix(s: string): number {
  * `comment` is the substring from a line's first `;` to its end (or `""` if
  * the line has none) — this predicate does not care what precedes that `;`,
  * so an indented `    ; CHANGE_LAYER` matches exactly like an unindented
- * one, mirroring the Rust port's `detect_layer_comments`, which finds the
- * first `;` anywhere in the line rather than anchoring to column 0.
+ * one. Its Rust port, `is_change_layer_comment`, takes the identical
+ * pre-sliced input for the identical reason: both languages' call sites
+ * (here, `hasLayerComments` and the `parseGcode` loop; there,
+ * `detect_layer_comments` and `parse_reader`) find that first `;` by
+ * scanning the whole line rather than anchoring to column 0, before this
+ * predicate ever sees the comment.
  *
  * Shared between pass 1 (`hasLayerComments`'s whole-file lookahead, below)
  * and pass 2 (the per-line loop in `parseGcode`) so the two cannot
