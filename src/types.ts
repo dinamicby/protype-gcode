@@ -48,11 +48,11 @@ export interface ParsedGcodeArrays {
    *
    * NOT a layer index: `layers.length` does not always equal the number of
    * distinct `layer` values, and `layers[layer]` is not a valid lookup.
-   * Verified on the goldens — `no-layer-comments` is 3 against 4, `simplify3d`
-   * is 1 against 2. The counts diverge because the bookkeeping that fills
-   * `layers` and the counter that assigns `layer` advance at different points
-   * in the parse loop. Pre-existing behaviour, faithfully ported; do not
-   * "fix" it by deriving one from the other.
+   * Verified on the goldens — `no-layer-comments` is 3 against 4. The counts
+   * diverge because the bookkeeping that fills `layers` and the counter that
+   * assigns `layer` advance at different points in the parse loop.
+   * Pre-existing behaviour, faithfully ported; do not "fix" it by deriving
+   * one from the other.
    */
   layers: number[];
   bounds: Bounds;

@@ -117,8 +117,13 @@ export function decodePcode(input: ArrayBuffer | ArrayBufferView): ParsedGcodeAr
   const layerZCount = view.getUint32(40, true);
 
   // The layers array is carried verbatim from the parser rather than derived
-  // from point Z: on the `;LAYER_CHANGE` path the two disagree by one layer,
-  // and `ParsedGcodeArrays.layers` must match what the local parser produces.
+  // from point Z. Every layer-change comment style the parser understands
+  // records its Z from an explicit `; Z_HEIGHT:` or, failing that, the new
+  // layer's first extruding move (see `parser.ts`'s `awaitingLayerZ`), so in
+  // practice the two notions agree today — but this format was built to
+  // survive a disagreement between them, not to assume one away:
+  // `ParsedGcodeArrays.layers` must match what the local parser produces
+  // regardless of whether the two ever diverge again.
   //
   // `layerZCount` and `layerCount` are untrusted (straight off the wire).
   // Rather than looping a hostile count times, each is turned into an end

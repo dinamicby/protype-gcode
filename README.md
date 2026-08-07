@@ -92,8 +92,8 @@ the number of distinct `layer` values a point can carry, and
 `layers[somePoint.layer]` is not a valid lookup — the two are populated by
 independent bookkeeping that advances at different points in the parse.
 This is verified on the committed goldens (`no-layer-comments` is 3
-against 4 distinct point-layer values; `simplify3d` is 1 against 2) and is
-faithfully preserved, not a bug to "fix" by deriving one from the other.
+against 4 distinct point-layer values) and is faithfully preserved, not a
+bug to "fix" by deriving one from the other.
 See the doc comment on `ParsedGcodeArrays.layers` in `src/types.ts` for
 the full mechanism.
 

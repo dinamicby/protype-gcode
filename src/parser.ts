@@ -142,16 +142,20 @@ export function parseGcode(text: string): ParsedGcodeArrays {
   // Track Z for layer detection (ignoring Z-hop)
   let layerZ = 0;        // Z height of current layer (ignoring hops)
   let hasSlicerLayers = false; // true if we found slicer layer comments
-  // Set when `; CHANGE_LAYER` has advanced `layer` but its Z is not yet
-  // known. Cleared either by the `; Z_HEIGHT:` that should follow, or, if
-  // that never comes, by the new layer's first extruding move (see both
-  // sites below). Deliberately state-then-record rather than guess-then-
-  // correct: guessing a Z at `; CHANGE_LAYER` time and overwriting it once
-  // the real value is known means pushing a value into `layerZs` before it
-  // is known, and `pushLayerZ`'s dedup silently drops that guess whenever it
-  // collides with a value already in the list — which, for consecutive
-  // layers, it always eventually does, collapsing every layer down to one
-  // shared entry.
+  // Set by any layer-change comment (`;LAYER:N`, `; layer N`,
+  // `;LAYER_CHANGE`, `; CHANGE_LAYER`) once it has advanced `layer` but
+  // before its Z is known. Cleared either by the `; Z_HEIGHT:` that states
+  // it explicitly, or, if none comes, by the new layer's first extruding
+  // move (see both sites below). Deliberately state-then-record rather
+  // than guess-then-correct: guessing a Z at marker time and overwriting it
+  // once the real value is known means pushing a value into `layerZs`
+  // before it is known, and `pushLayerZ`'s dedup silently drops that
+  // guess whenever it collides with a value already in the list — which,
+  // for consecutive layers, it always eventually does, collapsing every
+  // layer down to one shared entry. This is also why every layer-change
+  // marker used to record `layers` one layer behind the actual point
+  // geometry: none of them are guessing wrong on purpose, they just had
+  // nothing but a stale `z` to guess with.
   let awaitingLayerZ = false;
 
   const pushLayerZ = (v: number): void => {
@@ -190,14 +194,15 @@ export function parseGcode(text: string): ParsedGcodeArrays {
         const nextHeight = parseFloatPrefix(tail.slice(7).trim());
         if (!Number.isNaN(nextHeight) && nextHeight > 0) height = nextHeight;
       } else if (lower.startsWith("z_height:")) {
-        // `; Z_HEIGHT:` arrives on the line after `; CHANGE_LAYER` and states
-        // the new layer's Z exactly — record it now, rather than guessing at
-        // `; CHANGE_LAYER` time and fixing the guess up later (see
-        // `awaitingLayerZ`'s doc comment for why that failed). A
-        // `; Z_HEIGHT:` with no pending layer change is stray — Orca's
-        // config block can carry arbitrary key/value comments — so ignore it
-        // rather than recording a Z for a layer transition that never
-        // happened.
+        // Orca (stock or Protype's fork) writes `; Z_HEIGHT:` on the line
+        // right after its layer-change comment (`;LAYER_CHANGE` or
+        // `; CHANGE_LAYER`), and it states the new layer's Z exactly —
+        // record it now, rather than guessing at marker time and fixing the
+        // guess up later (see `awaitingLayerZ`'s doc comment for why that
+        // failed). A `; Z_HEIGHT:` with no pending layer change is stray —
+        // Orca's config block can carry arbitrary key/value comments — so
+        // ignore it rather than recording a Z for a layer transition that
+        // never happened.
         const nextZ = parseFloatPrefix(tail.slice(9).trim());
         if (!Number.isNaN(nextZ) && awaitingLayerZ) {
           pushLayerZ(nextZ);
@@ -218,14 +223,14 @@ export function parseGcode(text: string): ParsedGcodeArrays {
       if (layerMatch) {
         layer = parseInt(layerMatch[1], 10);
         hasSlicerLayers = true;
-        pushLayerZ(z);
+        awaitingLayerZ = true;
         continue;
       }
 
       if (/;LAYER_CHANGE/i.test(comment)) {
         layer++;
         hasSlicerLayers = true;
-        pushLayerZ(z);
+        awaitingLayerZ = true;
         continue;
       }
 
@@ -236,18 +241,15 @@ export function parseGcode(text: string): ParsedGcodeArrays {
       // `change_layer_gcode` setting, and the config block is written into
       // the file as comments.
       //
-      // Unlike the `;LAYER_CHANGE` branch above, this does NOT push a Z
-      // here. `;LAYER_CHANGE`-style slicers give no other signal, so that
-      // branch pushes the current (pre-transition) `z` as its best guess —
-      // which is why `pcode-decoder.ts` documents the `;LAYER_CHANGE` path
-      // as disagreeing with point Z by one layer, and that disagreement is
-      // preserved end-to-end deliberately. Protype's slicer gives strictly
-      // more signal — an explicit `; Z_HEIGHT:` right after this comment —
-      // so this path can and does record the exact value instead of
-      // guessing one (see `awaitingLayerZ` and its two consumers). That the
-      // two marker styles now disagree in accuracy is intentional, not a
-      // regression to reconcile: `;LAYER_CHANGE` files must keep parsing
-      // exactly as they do today.
+      // Same handling as every branch above: advance the layer and wait for
+      // `; Z_HEIGHT:` (or, failing that, the new layer's first extruding
+      // move) to say what its Z actually is, rather than guessing one now.
+      // All four marker styles used to disagree here — `;LAYER_CHANGE` and
+      // friends pushed the pre-transition `z` immediately, which is why
+      // `layers` was documented as lagging one layer behind the geometry —
+      // but that lag was never a property any marker style needs, only an
+      // artifact of reading a Z before the file had stated one. See
+      // `awaitingLayerZ`'s doc comment.
       if (comment.slice(1).trim().toLowerCase() === "change_layer") {
         layer++;
         hasSlicerLayers = true;
@@ -324,8 +326,10 @@ export function parseGcode(text: string): ParsedGcodeArrays {
         // The layer will be counted when we extrude at this Z.
       }
       if (awaitingLayerZ && isExtrusion) {
-        // `; CHANGE_LAYER` fired but no `; Z_HEIGHT:` followed — not every
-        // Orca-derived profile is guaranteed to emit one. Fall back to the
+        // A layer-change comment fired but no `; Z_HEIGHT:` followed — the
+        // normal case for `;LAYER:N`, `; layer N` and `;LAYER_CHANGE`
+        // slicers, which don't emit that comment at all, and also possible
+        // for an Orca-style file whose profile omits it. Fall back to the
         // new layer's first extruding move for its Z, the same shape the
         // no-marker heuristic just above already uses.
         pushLayerZ(newZ);

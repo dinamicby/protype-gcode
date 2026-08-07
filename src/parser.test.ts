@@ -227,4 +227,41 @@ describe("Protype slicer markers", () => {
     expect(m.layers).toEqual([0.2, 0.4]);
     expect(Array.from(m.layer.slice(0, m.count))).toEqual([0, 1]);
   });
+
+  // The two tests below port a second round of Rust fixes: review found that
+  // stock OrcaSlicer pairs `;LAYER_CHANGE` with `; Z_HEIGHT:` too (see
+  // `fixtures/gcode/orca.gcode`), so scoping state-then-record to
+  // `; CHANGE_LAYER` alone left Orca files recording a Z the file had
+  // already stated correctly. The rule is now uniform across all four
+  // layer-change comment styles (`;LAYER:N`, `; layer N`, `;LAYER_CHANGE`,
+  // `; CHANGE_LAYER`): each advances the layer and waits, `; Z_HEIGHT:`
+  // records the stated value when one is pending, and the new layer's first
+  // extruding move is the fallback when the file states none. There is no
+  // longer an asymmetry between `; CHANGE_LAYER` and the other three styles.
+  it("records the stated Z for stock Orca's `;LAYER_CHANGE` marker", () => {
+    // Stock OrcaSlicer — not just Protype's fork — pairs `;LAYER_CHANGE`
+    // with `; Z_HEIGHT:` on the very next line; see
+    // `fixtures/gcode/orca.gcode`. The state-then-record rule applies to
+    // every layer-change marker, not only `; CHANGE_LAYER`, so this must
+    // record the stated Z instead of the old lagging pre-transition guess.
+    const src = [
+      ";LAYER_CHANGE", "; Z_HEIGHT: 0.2", "G1 X1 Y1 Z0.2 E1",
+      ";LAYER_CHANGE", "; Z_HEIGHT: 0.4", "G1 X2 Y2 Z0.4 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(m.layers).toEqual([0.2, 0.4]);
+  });
+
+  it("falls back to the move's Z for `;LAYER_CHANGE` with no `; Z_HEIGHT:` comment", () => {
+    // PrusaSlicer, Cura and Simplify3D never emit `; Z_HEIGHT:` at all —
+    // `;LAYER_CHANGE` (and `;LAYER:N` / `; layer N`) must still end up with
+    // the new layer's actual Z via the first-extruding-move fallback, not
+    // left on the old one-layer-behind guess.
+    const src = [
+      ";LAYER_CHANGE", "G1 X1 Y1 Z0.2 E1",
+      ";LAYER_CHANGE", "G1 X2 Y2 Z0.4 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(m.layers).toEqual([0.2, 0.4]);
+  });
 });
