@@ -264,4 +264,28 @@ describe("Protype slicer markers", () => {
     const m = parseGcode(src);
     expect(m.layers).toEqual([0.2, 0.4]);
   });
+
+  it("accepts an indented `; CHANGE_LAYER` exactly like an unindented one", () => {
+    // Regression: pass 1 (`hasLayerComments`) used to detect this marker
+    // with a regex anchored to the start of the line
+    // (`/^;\s*CHANGE_LAYER\s*$/`), so an indented marker slipped through
+    // undetected and the *whole file* fell back to the Z-delta heuristic —
+    // even though pass 2's own per-line check (scanning from the first `;`
+    // wherever it falls) would have accepted the very same line. The two
+    // passes disagreeing was the bug; both now share one predicate
+    // (`isChangeLayerComment`) so they cannot drift apart again.
+    //
+    // Both moves sit at the same Z on purpose: the Z-delta fallback only
+    // ever advances on a Z *increase*, so if pass 1 still failed to
+    // recognize the indented marker, both points would land on layer 0
+    // instead of the marker path's [0, 1]. This is what makes the test
+    // discriminate the fix from the bug, unlike a monotonically-increasing
+    // fixture the fallback could satisfy on its own.
+    const src = [
+      "    ; CHANGE_LAYER", "G1 X1 Y1 Z0.2 E1",
+      "    ; CHANGE_LAYER", "G1 X2 Y2 Z0.2 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(Array.from(m.layer.slice(0, m.count))).toEqual([0, 1]);
+  });
 });

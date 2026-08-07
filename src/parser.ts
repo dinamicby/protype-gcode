@@ -122,6 +122,31 @@ function parseFloatPrefix(s: string): number {
   return parseFloat(s);
 }
 
+/**
+ * Protype's slicer (an Orca fork) writes `; CHANGE_LAYER`. Matched as the
+ * whole trimmed comment body being exactly this word, not a substring: an
+ * Orca profile can carry a `change_layer_gcode` setting, and the config
+ * block is written into the file as comments.
+ *
+ * `comment` is the substring from a line's first `;` to its end (or `""` if
+ * the line has none) — this predicate does not care what precedes that `;`,
+ * so an indented `    ; CHANGE_LAYER` matches exactly like an unindented
+ * one, mirroring the Rust port's `detect_layer_comments`, which finds the
+ * first `;` anywhere in the line rather than anchoring to column 0.
+ *
+ * Shared between pass 1 (`hasLayerComments`'s whole-file lookahead, below)
+ * and pass 2 (the per-line loop in `parseGcode`) so the two cannot
+ * independently drift on what counts as this marker — the two disagreeing
+ * was a real bug this shared predicate exists to make impossible again: a
+ * pass-1 regex anchored to the start of the line missed an indented marker
+ * that pass 2's own check still accepted, so an indented file fell back to
+ * the Z-delta heuristic entirely while individual lines still tried (and
+ * partly failed) to run the marker path.
+ */
+function isChangeLayerComment(comment: string): boolean {
+  return comment.slice(1).trim().toLowerCase() === "change_layer";
+}
+
 export function parseGcode(text: string): ParsedGcodeArrays {
   const builder = new PointBuilder();
   let x = 0, y = 0, z = 0, e = 0, feedrate = 1500;
@@ -162,15 +187,27 @@ export function parseGcode(text: string): ParsedGcodeArrays {
     if (!layerZs.includes(v)) layerZs.push(v);
   };
 
-  // First pass: check if file has slicer layer markers
+  const gcodeLines = text.split('\n');
+
+  // First pass: check if file has slicer layer markers. The pre-existing
+  // markers (`;LAYER:`, `;LAYER_CHANGE`, `; layer N`) are still detected via
+  // a whole-text regex — untouched, out of this fix's scope. `; CHANGE_LAYER`
+  // is instead scanned per line with the same first-`;`, exact-body
+  // predicate pass 2 uses (`isChangeLayerComment` above), not a second
+  // regex: a regex anchored to the start of the line (this file's previous
+  // approach) would silently miss an indented `; CHANGE_LAYER`, while pass
+  // 2's own per-line check — which does not care what precedes the `;` —
+  // would still accept it, and `\s*` matching a newline let that regex
+  // false-positive across two separate lines besides. Reusing the exact
+  // predicate closes both gaps and makes the two passes structurally unable
+  // to drift apart on this marker again.
   const hasLayerComments =
     /;(?:LAYER:|LAYER_CHANGE| layer \d)/im.test(text)
-    // Protype's slicer (an Orca fork) writes `; CHANGE_LAYER`. Anchored to
-    // the whole line so an Orca `change_layer_gcode` setting — written into
-    // the file's header as a `key = value` comment — cannot match.
-    || /^;\s*CHANGE_LAYER\s*$/im.test(text);
+    || gcodeLines.some((rawLine) => {
+      const idx = rawLine.indexOf(';');
+      return idx >= 0 && isChangeLayerComment(rawLine.slice(idx));
+    });
 
-  const gcodeLines = text.split('\n');
   for (const rawLine of gcodeLines) {
     const commentIdx = rawLine.indexOf(';');
     const comment = commentIdx >= 0 ? rawLine.substring(commentIdx) : '';
@@ -236,10 +273,8 @@ export function parseGcode(text: string): ParsedGcodeArrays {
 
       // Protype's slicer (an Orca fork) writes `; CHANGE_LAYER` — the words
       // the other way round from PrusaSlicer's `;LAYER_CHANGE` above, so the
-      // two never collide. Matched on the whole trimmed comment body being
-      // exactly this word, not a substring: an Orca profile can carry a
-      // `change_layer_gcode` setting, and the config block is written into
-      // the file as comments.
+      // two never collide. See `isChangeLayerComment` for the exact-match
+      // rule (shared with pass 1, above).
       //
       // Same handling as every branch above: advance the layer and wait for
       // `; Z_HEIGHT:` (or, failing that, the new layer's first extruding
@@ -250,7 +285,7 @@ export function parseGcode(text: string): ParsedGcodeArrays {
       // but that lag was never a property any marker style needs, only an
       // artifact of reading a Z before the file had stated one. See
       // `awaitingLayerZ`'s doc comment.
-      if (comment.slice(1).trim().toLowerCase() === "change_layer") {
+      if (isChangeLayerComment(comment)) {
         layer++;
         hasSlicerLayers = true;
         awaitingLayerZ = true;
