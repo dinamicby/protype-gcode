@@ -1,8 +1,8 @@
 {
   "pointCount": 8,
   "layers": [
-    0.0,
-    0.2
+    0.2,
+    0.4
   ],
   "bounds": {
     "minX": 50.0,
@@ -29,8 +29,8 @@
       "tool": 0,
       "feedrate": 3600.0,
       "featureType": 0,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -41,8 +41,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 10,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -53,8 +53,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 1,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 52.0,
@@ -65,8 +65,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 68.0,
@@ -77,8 +77,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 50.0,
@@ -89,8 +89,8 @@
       "tool": 0,
       "feedrate": 3600.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -101,8 +101,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 2,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -113,8 +113,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 2,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     }
   ],
   "tail": [
@@ -127,8 +127,8 @@
       "tool": 0,
       "feedrate": 3600.0,
       "featureType": 0,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -139,8 +139,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 10,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -151,8 +151,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 1,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 52.0,
@@ -163,8 +163,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 68.0,
@@ -175,8 +175,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 50.0,
@@ -187,8 +187,8 @@
       "tool": 0,
       "feedrate": 3600.0,
       "featureType": 3,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -199,8 +199,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 2,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 70.0,
@@ -211,8 +211,8 @@
       "tool": 0,
       "feedrate": 1200.0,
       "featureType": 2,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     }
   ]
 }

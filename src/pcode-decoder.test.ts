@@ -182,14 +182,22 @@ describe("decodePcode", () => {
   });
 
   test("keeps the layers array independent of the Z its points sit at", () => {
-    // The format carries two deliberately non-redundant notions of layer Z.
-    // On the `;LAYER_CHANGE` path the parser's `layers` lags one layer behind
-    // the geometry, so `layers` reads [0, 0.2] while the points sit at
-    // 0.2/0.4. Deriving either from the other would silently break the remote
-    // viewer's agreement with the local one — see parser.ts's `layers` doc.
+    // The format carries two deliberately non-redundant notions of layer Z,
+    // decoded independently rather than one derived from the other (see
+    // pcode-decoder.ts's "carried verbatim" comment). Every layer-change
+    // comment style the parser understands now records its Z from an
+    // explicit `; Z_HEIGHT:` or, failing that, the new layer's first
+    // extruding move (see parser.ts's `awaitingLayerZ`), so for this fixture
+    // the two notions agree today: `layers` reads [0.2, 0.4], the same Z the
+    // points sit at. They did not always — this used to be exactly where
+    // PrusaSlicer's `;LAYER_CHANGE` path lagged one layer behind the
+    // geometry, reading `layers` as [0, 0.2] while the points already sat at
+    // 0.2/0.4. The decoder must still carry `layers` verbatim rather than
+    // derive it from `zs`, or a future divergence would be silently
+    // swallowed instead of surfaced.
     const model = decodePcode(loadFixture("prusaslicer"));
 
-    expect(model.layers).toEqual([0, 0.2]);
+    expect(model.layers).toEqual([0.2, 0.4]);
     // `zs` is a Float32Array; compare against the float32-narrowed values
     // rather than the f64 literals (see the `zs` narrowing note above).
     expect([...new Set(model.zs)].sort((a, b) => a - b)).toEqual([

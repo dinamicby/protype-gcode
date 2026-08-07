@@ -1,8 +1,8 @@
 {
   "pointCount": 17,
   "layers": [
-    0.0,
-    0.2
+    0.2,
+    0.4
   ],
   "bounds": {
     "minX": 0.0,
@@ -30,8 +30,8 @@
       "tool": 0,
       "feedrate": 7200.0,
       "featureType": 0,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 10.0,
@@ -236,8 +236,8 @@
       "tool": 0,
       "feedrate": 7200.0,
       "featureType": 0,
-      "width": 0.42,
-      "height": 0.2
+      "width": 0.0,
+      "height": 0.0
     },
     {
       "x": 10.0,
