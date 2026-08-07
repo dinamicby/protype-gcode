@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, it } from "vitest";
 import { parseGcode } from "./parser";
 import {
   FEATURE_OUTER_WALL,
@@ -131,10 +131,14 @@ describe("parseGcode", () => {
       // stay at their initial defaults for every point — checked per-index
       // (not just `.length`) so a grow() that dropped one of these four
       // copies would leave indices 0..1023 zeroed and still be caught.
+      // Defaults are 0 (absent means absent — see `parseGcode`'s `width`/
+      // `height` declarations); this test only cares that grow() carries
+      // whatever the initial value is through unmolested, not what that
+      // value happens to be.
       expect(m.featureType[i]).toBe(FEATURE_UNKNOWN);
       expect(m.feedrate[i]).toBe(1500);
-      expect(m.width[i]).toBeCloseTo(0.42, 5);
-      expect(m.height[i]).toBeCloseTo(0.2, 5);
+      expect(m.width[i]).toBe(0);
+      expect(m.height[i]).toBe(0);
     };
 
     expectPoint(0);        // written before any growth, cap 1024
@@ -143,5 +147,84 @@ describe("parseGcode", () => {
     expectPoint(2000);     // in the second-generation (2048) buffer
     expectPoint(2048);     // first index written right after the 2048 -> 4096 grow
     expectPoint(N - 1);    // 2499, last index, in the final (4096-capacity) buffer
+  });
+});
+
+describe("Protype slicer markers", () => {
+  it("counts layers from `; CHANGE_LAYER`", () => {
+    const src = [
+      "; CHANGE_LAYER", "; Z_HEIGHT: 0.2", "G1 X1 Y1 Z0.2 E1",
+      "; CHANGE_LAYER", "; Z_HEIGHT: 0.4", "G1 X2 Y2 Z0.4 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(Array.from(m.layer.slice(0, m.count))).toEqual([0, 1]);
+  });
+
+  it("reads `; FEATURE:` as the line type", () => {
+    const src = "; FEATURE: Outer wall\nG1 X1 Y1 Z0.2 E1\n; FEATURE: Sparse infill\nG1 X2 Y2 E2\n";
+    const m = parseGcode(src);
+    expect(m.featureType[0]).toBe(FEATURE_OUTER_WALL);
+    expect(m.featureType[1]).toBe(FEATURE_INFILL);
+  });
+
+  it("reads `; LAYER_HEIGHT:` as the layer height", () => {
+    const m = parseGcode("; LAYER_HEIGHT: 0.3\nG1 X1 Y1 Z0.3 E1\n");
+    expect(m.height[0]).toBeCloseTo(0.3, 6);
+  });
+
+  it("ignores config-block keys that only look like markers", () => {
+    // Orca writes its settings into the file as `key = value` comments; the
+    // sample job carries `; layer_height = 0.2` in its header. Only the colon
+    // separates a setting from a marker.
+    const src = "; layer_height = 0.2\n; change_layer_gcode = G1 X0\nG1 X1 Y1 Z0.2 E1\n";
+    const m = parseGcode(src);
+    expect(m.height[0]).toBe(0);
+    expect(m.layer[0]).toBe(0);
+  });
+
+  it("leaves width and height at zero when the file states neither", () => {
+    const m = parseGcode("G1 X1 Y1 Z0.2 E1\n");
+    expect(m.width[0]).toBe(0);
+    expect(m.height[0]).toBe(0);
+  });
+
+  // The two tests below port Task 1's "Fix round 1" regression tests
+  // (services/procontrol-core/src/preview/parser.rs). They are not in the
+  // original task brief, which predates that fix round, but the brief's own
+  // "Interfaces" section defers to "whichever `; Z_HEIGHT:` approach Task 1
+  // chose" — the state-then-record design below is that approach, and these
+  // are the tests that actually distinguish it from the guess-then-correct
+  // design that regressed `layers`. The "counts layers" test above only
+  // checks per-point `layer`, which the pre-existing Z-delta fallback
+  // heuristic derives correctly on its own for this monotonically-increasing
+  // fixture even when the marker path is broken — so it would stay green
+  // either way and cannot catch the collapse these two are written for.
+  it("records each layer's own Z height instead of collapsing into one", () => {
+    // Regression: `; CHANGE_LAYER` must not push a *guess* (the previous
+    // move's Z) into `layers`, relying on the following `; Z_HEIGHT:` to
+    // overwrite it. Once a second layer's guess collides with the first
+    // layer's already-corrected value, dedup silently skips the push, and
+    // the correction that follows clobbers the wrong (shared) slot — every
+    // layer beyond the first collapses into one entry.
+    const src = [
+      "; CHANGE_LAYER", "; Z_HEIGHT: 0.2", "G1 X1 Y1 Z0.2 E1",
+      "; CHANGE_LAYER", "; Z_HEIGHT: 0.4", "G1 X2 Y2 Z0.4 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(m.layers).toEqual([0.2, 0.4]);
+  });
+
+  it("falls back to the move's Z when `; CHANGE_LAYER` has no `; Z_HEIGHT:` comment", () => {
+    // Not every Orca-derived profile is guaranteed to pair `; CHANGE_LAYER`
+    // with `; Z_HEIGHT:`. Absent that comment, the new layer's first
+    // extruding move must still end up recorded, rather than left out of
+    // `layers` entirely.
+    const src = [
+      "; CHANGE_LAYER", "G1 X1 Y1 Z0.2 E1",
+      "; CHANGE_LAYER", "G1 X2 Y2 Z0.4 E2",
+    ].join("\n");
+    const m = parseGcode(src);
+    expect(m.layers).toEqual([0.2, 0.4]);
+    expect(Array.from(m.layer.slice(0, m.count))).toEqual([0, 1]);
   });
 });
