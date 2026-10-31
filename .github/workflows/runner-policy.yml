@@ -1,0 +1,26 @@
+name: runner-policy
+
+# Hosted macOS and Windows runners are banned, see .github/runner_policy.py.
+# Only a change under .github can break the rule, so the job runs for those:
+# every job bills at least a minute, and this is the same on all pull requests.
+on:
+  pull_request:
+    paths: ['.github/**']
+  push:
+    branches: [main, master]
+    paths: ['.github/**']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: No hosted macOS or Windows runners
+        run: python3 .github/runner_policy.py
+      - name: Tests of the check (canonical copy only)
+        if: hashFiles('scripts/ci/test_runner_policy.py') != ''
+        run: python3 -m unittest scripts/ci/test_runner_policy.py
